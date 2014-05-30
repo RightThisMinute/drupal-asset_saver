@@ -13,12 +13,12 @@ const ASSET_SAVER_URI_PREFIX = 'public://asset_saver'
  **/
 function asset_saver_url_to_file($url)
 {
+  _asset_saver_clear_cache_maybe();
+
   if (strpos($url, '//') === 0) {
     $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
     $url = "$protocol:$url";
   }
-
-  _asset_saver_clear_cache_maybe();
 
   $uri      = asset_saver_url_to_file_uri($url);
   $filename = drupal_realpath($uri);
@@ -108,9 +108,11 @@ function _asset_saver_clear_cache_maybe()
   $hasnt_cleared = cache_get($cache_id);
   if ($hasnt_cleared) return;
 
-  _asset_saver_rmdir(ASSET_SAVER_URI_PREFIX);
-
   cache_set($cache_id, true);
+    # Set the flag before actually clearing the cache to stop multiple request
+    # trying to clear this cache at once.
+
+  _asset_saver_rmdir(ASSET_SAVER_URI_PREFIX);
 }
 
 
