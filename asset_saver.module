@@ -20,6 +20,19 @@ function asset_saver_flush_caches()
   return array();
 }
 
+/**
+ * Implements @see hook_admin_menu_cache_info()
+ */
+function asset_saver_admin_menu_cache_info()
+{
+  $caches['asset_saver'] = array(
+     'title'    => t('Asset Saver saved files')
+    ,'callback' => 'Drupal\\asset_saver\\_clear_all_files'
+  );
+
+  return $caches;
+}
+
 } // END namespace global
 
 
