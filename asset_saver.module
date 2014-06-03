@@ -71,10 +71,27 @@ function url_to_file($url)
     return $uri;
 
   ## Save the file
+  $lock_name = 'asset_saver:save_file:'.base64_encode($uri);
+  if (!lock_acquire($lock_name))
+    # Hopefully, the other request that is trying to save this file will be
+    # finished by the time the client requests the file.
+    return $uri;
+
+  if (file_exists($filename)) {
+    # Looks like a different request was able to create this file just as this
+    # request tried to acquire the lock.
+    lock_release($lock_name);
+    return $uri;
+  }
+
   $contents = file_get_contents($url);
-  if ($contents === false)
-    return (file_exists($filename)) ? $path : false;
+  if ($contents === false) {
+    lock_release($lock_name);
+    watchdog('asset_saver', 'Failed downloading asset "%url"'
+            ,array('%url' => $url), WATCHDOG_ERROR);
+    return file_exists($filename) ? $uri : false;
       # The old file is better than no file.
+  }
 
   # Uncompress if needed.
   $headers = get_headers($url, true);
@@ -91,6 +108,7 @@ function url_to_file($url)
   # Write the file.
   $path = file_unmanaged_save_data($contents, $uri, FILE_EXISTS_REPLACE);
 
+  lock_release($lock_name);
   return $path;
 }
 
