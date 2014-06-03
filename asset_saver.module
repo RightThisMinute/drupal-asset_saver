@@ -1,9 +1,7 @@
 <?php
+namespace {
 
-const ASSET_SAVER_URI_PREFIX       = 'public://asset_saver'
-    , ASSET_SAVER_MAX_AGE          = 86500 # 1 day
-    , ASSET_SAVER_FLUSH_CACHE_LOCK = 'asset_saver:flush_cache';
-
+use Drupal\asset_saver;
 
 /**
  * Implements @see hook_flush_caches()
@@ -18,14 +16,18 @@ const ASSET_SAVER_URI_PREFIX       = 'public://asset_saver'
  **/
 function asset_saver_flush_caches()
 {
-  if (!lock_acquire(ASSET_SAVER_FLUSH_CACHE_LOCK))
-    return array();
-
-  _asset_saver_rmdir(ASSET_SAVER_URI_PREFIX);
-
-  lock_release(ASSET_SAVER_FLUSH_CACHE_LOCK);
+  asset_saver\_clear_all_files();
   return array();
 }
+
+} // END namespace global
+
+
+namespace Drupal\asset_saver {
+
+const URI_PREFIX       = 'public://asset_saver'
+    , MAX_AGE          = 86500 # 1 day
+    , FLUSH_CACHE_LOCK = 'asset_saver:flush_cache';
 
 
 /**
@@ -36,23 +38,23 @@ function asset_saver_flush_caches()
  * @return The path to the local file or `FALSE` on failure.
  * @author Donovan Mueller <zotobi@gmail.com>
  **/
-function asset_saver_url_to_file($url)
+function url_to_file($url)
 {
   if (strpos($url, '//') === 0) {
     $protocol = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
     $url = "$protocol:$url";
   }
 
-  $uri      = asset_saver_url_to_file_uri($url);
+  $uri      = _url_to_file_uri($url);
   $filename = drupal_realpath($uri);
 
-  lock_wait(ASSET_SAVER_FLUSH_CACHE_LOCK);
+  lock_wait(FLUSH_CACHE_LOCK);
     # Don't want to have the file disappear out from under the user or the
     # creation of a new file when the system is trying to remove all of them.
 
   # Does the file already exist?
   if ($filename and file_exists($filename)
-  and (time() - filemtime($filename)) < ASSET_SAVER_MAX_AGE)
+  and (time() - filemtime($filename)) < MAX_AGE)
     return $uri;
 
   ## Save the file
@@ -65,7 +67,7 @@ function asset_saver_url_to_file($url)
   $headers = get_headers($url, true);
   if (isset($headers['Content-Encoding'])
   and $headers['Content-Encoding'] === 'gzip')
-    $contents = _asset_saver_gzdecode($contents);
+    $contents = _gzdecode($contents);
 
   # Prepare the directory.
   $dir_is_ready = file_prepare_directory(
@@ -79,6 +81,7 @@ function asset_saver_url_to_file($url)
   return $path;
 }
 
+
 /**
  * Takes a remote URL and converts it to a local file URI.
  *
@@ -87,7 +90,7 @@ function asset_saver_url_to_file($url)
  * @return The local file URI on success, `FALSE` otherwise.
  * @author Donovan Mueller <zotobi@gmail.com>
  **/
-function asset_saver_url_to_file_uri($url)
+function _url_to_file_uri($url)
 {
   # Break URL into manageable pieces.
   if (version_compare(PHP_VERSION, '5.4.7', '<') and strpos($url, '//') === 0)
@@ -111,7 +114,7 @@ function asset_saver_url_to_file_uri($url)
     # Hint to the webserver to serve these with the correct mime type.
     $uri .= '.js';
 
-  return ASSET_SAVER_URI_PREFIX . "/$uri";
+  return URI_PREFIX . "/$uri";
 }
 
 
@@ -125,7 +128,7 @@ function asset_saver_url_to_file_uri($url)
  *   The GZIP compressed string.
  * @return The uncompressed string.
  */
-function _asset_saver_gzdecode($data)
+function _gzdecode($data)
 {
   if (function_exists('gzdecode'))
     return gzdecode($data);
@@ -143,6 +146,22 @@ function _asset_saver_gzdecode($data)
 
 
 /**
+ * Clears all saved asset files.
+ *
+ * @return void
+ * @author Donovan Mueller <zotobi@gmail.com>
+ **/
+function _clear_all_files()
+{
+  if (!lock_acquire(FLUSH_CACHE_LOCK)) return;
+
+  _rmdir(URI_PREFIX);
+
+  lock_release(FLUSH_CACHE_LOCK);
+}
+
+
+/**
  * An alternative to Drupal's `drupal_rmdir()` that can handle non-empty
  * directories.
  *
@@ -151,14 +170,14 @@ function _asset_saver_gzdecode($data)
  * @param string $path
  *   A file path or Drupal URI.
  */
-function _asset_saver_rmdir($path)
+function _rmdir($path)
 {
     $path = drupal_realpath($path);
 
     if (is_dir($path)) {
       $files = array_diff(scandir($path), array('.', '..'));
       foreach ($files as $file)
-        _asset_saver_rmdir(realpath($path) . '/' . $file);
+        _rmdir(realpath($path) . '/' . $file);
 
       return rmdir($path);
     }
@@ -168,3 +187,5 @@ function _asset_saver_rmdir($path)
 
     return false;
 }
+
+} // END namespace Drupal\asset_saver
