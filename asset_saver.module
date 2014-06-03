@@ -40,7 +40,7 @@ namespace Drupal\asset_saver {
 
 const URI_PREFIX       = 'public://asset_saver'
     , MAX_AGE          = 86500 # 1 day
-    , FLUSH_CACHE_LOCK = 'asset_saver:flush_cache';
+    , CLEAR_FILES_LOCK = 'asset_saver:flush_cache';
 
 
 /**
@@ -61,7 +61,7 @@ function url_to_file($url)
   $uri      = _url_to_file_uri($url);
   $filename = drupal_realpath($uri);
 
-  lock_wait(FLUSH_CACHE_LOCK);
+  lock_wait(CLEAR_FILES_LOCK);
     # Don't want to have the file disappear out from under the user or the
     # creation of a new file when the system is trying to remove all of them.
 
@@ -166,11 +166,11 @@ function _gzdecode($data)
  **/
 function _clear_all_files()
 {
-  if (!lock_acquire(FLUSH_CACHE_LOCK)) return;
+  if (!lock_acquire(CLEAR_FILES_LOCK)) return;
 
   _rmdir(URI_PREFIX);
 
-  lock_release(FLUSH_CACHE_LOCK);
+  lock_release(CLEAR_FILES_LOCK);
 }
 
 
